@@ -17,22 +17,23 @@ int main(int argc, char *argv[]) {
 		printf("%s", "ash>> ");
 		chars = getline(&str, &bufsize, stdin);
 		
-		char *pstr = strtok(str, " ");
+		char *pstr = strtok(str, " \n");
 		
-		if(strcmp(pstr, "exit\n") == 0)
+		if(strcmp(pstr, "exit") == 0)
 			exit(0);
 
-		while(pstr != NULL){
-		
-			printf("%s ", pstr);
-			pstr = strtok(NULL, " ");
+		if(strcmp(pstr, "cd") == 0){
 
+			while(pstr != NULL){
+				
+				printf("%s is current str", pstr);
+				pstr = strtok(NULL, " \n");
+				chdir(pstr);
+
+			}
 		}
-
-		//handles exit functionality
-		if(strcmp(str, "exit") == 0)
-			exit(0);
-
+		
+		//create check if 'built-in' command used, then program will not fork. Else, command run in child does not execute in parent.
 		int rc = fork();
 		if (rc < 0) {
 			//fork failed
