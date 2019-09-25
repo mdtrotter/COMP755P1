@@ -9,22 +9,37 @@ int main(int argc, char *argv[]) {
 	char *str;
 	size_t bufsize = 200;
 	size_t chars;
-
 	str = (char *)malloc(bufsize * sizeof(char));
+
+	char *pathArr[20];
+	pathArr[0] = "/usr/bin";
+	int pathctr = 1;
 
 	while(strcmp(str, "exit") != 0){
 		printf("%s", "ash>> ");
 		chars = getline(&str, &bufsize, stdin); 
 
 		char *pstr = strtok(str, " \n");
-		
 		if(strcmp(pstr, "exit") == 0)
 			exit(0);
 
 		else if(strcmp(pstr, "cd") == 0){
 
+			pstr = strtok(NULL, " \n");
+			printf("chdir %s", pstr);
+
+			chdir(pstr);
+
+		}else if(strcmp(pstr, "path") == 0){
+			pstr = strtok(NULL, " \n");
+			while(pstr != NULL){
+				
+				pathArr[pathctr] = pstr;
+				pathctr++;
 				pstr = strtok(NULL, " \n");
-				printf("chdir %s", pstr);
+			}
+			for(int i=0; i<pathctr; i++)
+				printf("arr[%d] is %s", i, pathArr[i]);
 		}else{
 	
 		int rc = fork();
