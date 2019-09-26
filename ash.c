@@ -9,22 +9,38 @@ int main(int argc, char *argv[]) {
 	char *str;
 	size_t bufsize = 200;
 	size_t chars;
-
 	str = (char *)malloc(bufsize * sizeof(char));
+
+	char *pathArr[20];
+	pathArr[0] = "/usr/bin/";
+	pathArr[1] = "/bin/";
+	int pathctr = 2;
+	
+	char buff[255];
 
 	while(strcmp(str, "exit") != 0){
 		printf("%s", "ash>> ");
 		chars = getline(&str, &bufsize, stdin); 
 
 		char *pstr = strtok(str, " \n");
-		
-		if(strcmp(pstr, "exit") == 0)
+		if(strcmp(pstr, "exit") == 0){
 			exit(0);
-
+		}
 		else if(strcmp(pstr, "cd") == 0){
 
+			pstr = strtok(NULL, " \n");
+			printf("chdir %s", pstr);
+
+			chdir(pstr);
+
+		}else if(strcmp(pstr, "path") == 0){
+			pstr = strtok(NULL, " \n");
+			while(pstr != NULL){
+				
+				pathArr[pathctr] = pstr;
+				pathctr++;
 				pstr = strtok(NULL, " \n");
-				printf("chdir %s", pstr);
+			}
 		}else{
 	
 		int rc = fork();
@@ -33,14 +49,25 @@ int main(int argc, char *argv[]) {
 			fprintf(stderr, "fork failed\n");
 			exit(1);
 		}else if(rc == 0){
-				
-			char *myargs[2];
-			myargs[0] = strdup(str);
-			myargs[1] = NULL;
-			execvp(myargs[0], myargs);
-
+			
+			int pc = 0;
+			strcpy(buff, pathArr[pc]);
+			printf("%s", strcat(buff, pstr));
+			while(access(strcat(buff, pstr), X_OK) != 0 && pc < pathctr){
+				memset(buff, 0, sizeof buff);
+				pc++;
+				strcpy(buff, pathArr[pc]);
+				printf("%d", pc);
+			}
+			printf("%d", pc);
+			if (pc < pathctr){
+				char *myargs[2];
+				printf("%s", buff);
+				myargs[0] = strdup(buff);
+				myargs[1] = NULL;
+				execvp(myargs[0], myargs);
+			}
 		}else{
-			printf("exit? %s", pstr);
 			int rc_wait = wait(NULL);
 		}
 		}
