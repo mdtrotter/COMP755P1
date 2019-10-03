@@ -21,8 +21,21 @@ int main(int argc, char *argv[]) {
 	//stores path variable to be executed
 	char buff[255];
 
-	//stores counter for commands executed already
-	int execCtr=0;
+	if(argc > 1){
+		FILE *fp;
+		char str[200];
+		char* filename = argv[1];
+
+		fp = fopen(filename, "r");
+		if(fp == NULL){
+			printf("Could not open file %s", filename);
+			return 1;
+		}
+		while (fgets(str, 200, fp) != NULL)
+			system(str);
+		fclose(fp);
+		return 0;
+	}
 
 	while(strcmp(str, "exit") != 0){
 		
@@ -36,8 +49,8 @@ int main(int argc, char *argv[]) {
 			char *pstr = strtok(str, " \n");
 
 			//exit function
-			if(strcmp(pstr, "exit") == 0){
-			exit(0);
+			/*if(strcmp(pstr, "exit") == 0){
+				exit(0);
 
 			//cd function
 			}else if(strcmp(pstr, "cd") == 0){
@@ -57,7 +70,7 @@ int main(int argc, char *argv[]) {
 					pstr = strtok(NULL, " \n");
 				}
 			
-			}else{
+			}else{*/
 		while(pstr != NULL){
 						
 
@@ -86,6 +99,8 @@ int main(int argc, char *argv[]) {
 
 			//argC tracks each argument associated with the first command
 			int argC = 1;
+
+			int pb = 0;
 			
 			//loops through command string and places command at the beginning and args into myargs array
 			while(pstr != NULL){
@@ -94,14 +109,29 @@ int main(int argc, char *argv[]) {
 					pstr = strtok(NULL, " \n");
 					break;
 				}
-				if(init == 1){
+				else if(strcmp(pstr, "exit") == 0){
+					exit(0);
+				}
+				else if(strcmp(pstr, "cd") == 0){
+					pstr = strtok(NULL, " \n");
+					pb = 1;
+					chdir(pstr);
+				}
+				else if(strcmp(pstr, "path") == 0){
+					pstr = strtok(NULL, " \n");
+					while((pstr != NULL) || strcmp(pstr, "&") != 0){
+						pathArr[pathctr] = pstr;
+						pathctr++;
+						pstr = strtok(NULL, " \n");
+					}
+					pb = 1;
+				}
+				else if(init == 1){
 					strcat(comm, pstr);
 					init = 0;
-					execCtr++;
 				}else{	
 					myargs[argC] = pstr;
 					argC++;
-					execCtr++;
 				}
 				pstr = strtok(NULL, " \n");
 				printf("pstr is now %s\n", pstr);
@@ -129,7 +159,7 @@ int main(int argc, char *argv[]) {
 
 
 			//if a path was found for the current argument
-				if (pc < pathctr){
+				if (pc < pathctr && pb == 0){
 					//char *myargs[2];
 					myargs[0] = strdup(buff);
 					myargs[argC] = NULL;
@@ -147,6 +177,6 @@ int main(int argc, char *argv[]) {
 		}
 		}
 	}
-	}
+	
 	return 0;
 }
