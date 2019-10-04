@@ -84,9 +84,8 @@ int main(int argc, char *argv[]) {
 
 			//tracks how many paths have been tested with the command
 			int pc = 0;
-			char *myargs[10];
-
-			char *myargs2[10];
+			char *myargs[100];
+			int argInit[10];
 
 			//clears buff array
 			memset(buff, 0, sizeof buff);
@@ -107,27 +106,45 @@ int main(int argc, char *argv[]) {
 			int pb = 0;
 			
 			//pipe stuff
+			int numPipes = 0;
 			int isPipe = 0;
 			int fd[2];
-			pipe(fd);
+			if(pipe(fd)){
+				perror("pipe");
+				exit(1);
+			}
 			
 			//loops through command string and places command at the beginning and args into myargs array
 			while(pstr != NULL){
 				//if & is found, then execute command up to & and save execCtr to start after & in next loop through
 				if(strcmp(pstr, "&") == 0){
 					pstr = strtok(NULL, " \n");
+					myargs[argC] = NULL;
+					argC++;
 					break;
 				}
 				else if(strcmp(pstr, "|") == 0){
+					myargs[argC] = NULL;
+					argC++;
+
+					numPipes++;
+					argInit[numPipes] = argC;
 					pstr = strtok(NULL, " \n");
 					isPipe = 1;
-					int arg2C = 0;
-					while(pstr != NULL && strcmp(pstr, "&") != 0){
-						myargs2[arg2C] = pstr;
-						arg2C++;
+					while(pstr != NULL && strcmp(pstr, "&") != 0 && strcmp(pstr, ">") != 0){
+						if(strcmp(pstr, "|") == 0){
+							myargs[argC] = NULL;
+							argC++;
+							numPipes++;
+							argInit[numPipes] = argC;
+							pstr = strtok(NULL, " \n");
+						}
+						myargs[argC] = pstr;
+						argC++;
 						pstr = strtok(NULL, " \n");
 					}
-					myargs2[arg2C] = NULL;
+					myargs[argC] = NULL;
+					argC++;
 				}
 				else if(strcmp(pstr, "exit") == 0){
 					exit(0);
@@ -153,27 +170,18 @@ int main(int argc, char *argv[]) {
 					myargs[argC] = pstr;
 					argC++;
 				}
+				if(myargs[argC-1] != NULL){
+					myargs[argC] = NULL;
+				}
 				pstr = strtok(NULL, " \n");
-				printf("pstr is now %s\n", pstr);
 			}
 			
 			//check if comm (or arg[0]) is a command on the path
-			printf("%s\n", comm);
 			while(access(strcat(buff, comm), X_OK) != 0 && pc < pathctr){
-				printf("%d\n", pc);
 				pc++;
 				memset(buff, 0, sizeof buff);
 				strcpy(buff, pathArr[pc]);
 			}
-			
-			//check if comm after pipe is a command on the path
-			/*if(pc < pathctr){
-				comm = arg2
-				while(access(strcat(
-			}*/
-
-			printf("%s\n", buff);
-			printf("%d\n", argC);
 			
 			int rc = fork();
 			if (rc < 0){
@@ -187,38 +195,40 @@ int main(int argc, char *argv[]) {
 
 			//if a path was found for the current argument
 				if (pc < pathctr && pb == 0 && isPipe == 0){
-					//char *myargs[2];
 					myargs[0] = strdup(buff);
-					myargs[argC] = NULL;
+					//myargs[argC] = NULL;
 					if(execvp(myargs[0], myargs) == -1){
 						char error_message[30] = "error\n";
 						write(STDERR_FILENO, error_message, strlen(error_message));
 						exit(1);
 					}
 				}else if(isPipe == 1){
-					dup2(fd[1], STDOUT_FILENO);
+					dup2(fd[1], 1);
 					close(fd[0]);
 					close(fd[1]);
+					myargs[0] = strdup(buff);
 					if(execvp(myargs[0], myargs) == -1){
-						char error_message[30] = "error\n";
+						char error_message[30] = "error1\n";
 						write(STDERR_FILENO, error_message, strlen(error_message));
 						exit(1);
 					}
 				}
 				exit(1);
-			
 			}else{
 				if(pc < pathctr && isPipe == 1){
 				
 					rc = fork();
 
+					if(rc < 0){
+						fprintf(stderr, "fork failed\n");
+						exit(1);
+					}
 					if(rc == 0){
-						dup2(fd[0], STDIN_FILENO);
+						dup2(fd[0], 0);
 						close(fd[1]);
 						close(fd[0]);
-						//close(fd[READ_END]);
-						if(execvp(myargs2[0], myargs2) == -1){
-							char error_message[30] = "error\n";
+						if(execvp(myargs[argInit[1]], myargs) == -1){
+							char error_message[30] = "error2\n";
 							write(STDERR_FILENO, error_message, strlen(error_message));
 							exit(1);
 						}
@@ -232,6 +242,7 @@ int main(int argc, char *argv[]) {
 					int rc_wait = wait(NULL);
 				}
 			}
+			int rc_wait = wait(NULL);
 		}
 		}
 	}
