@@ -42,7 +42,7 @@ int main(int argc, char *argv[]) {
 		//begins shell prompt
 		printf("%s", "ash>> ");
 		chars = getline(&str, &bufsize, stdin); 
-		if(strchr(str, '|') != NULL || strchr(str, '>') != NULL){
+		if(/*strchr(str, '|') != NULL ||*/ strchr(str, '>') != NULL){
 			system(str);
 		}else{
 			// splits input string by " " and "\n"
@@ -81,10 +81,12 @@ int main(int argc, char *argv[]) {
 				exit(1);
 			}else if(rc == 0){
 			*/
+
+			//tracks how many paths have been tested with the command
 			int pc = 0;
-			char *myargs[10];
-			//loops through pathArr and checks if shell command is in one of the saved paths
-			
+			char *myargs[100];
+			int argInit[10];
+
 			//clears buff array
 			memset(buff, 0, sizeof buff);
 
@@ -94,20 +96,55 @@ int main(int argc, char *argv[]) {
 			//stores commands
 			char comm[255] = "";
 
-			//init is a boolean value that is set to false once the first argument is saved to comm
+			//init is a boolean value that is set to false once the first argument is saved to comm (for path testing)
 			int init = 1;
 
 			//argC tracks each argument associated with the first command
 			int argC = 1;
-
+			
+			//will become 1 if a pre-built command is issued and will then skip the fork
 			int pb = 0;
+			
+			//pipe stuff
+			int numPipes = 0;
+			int isPipe = 0;
+			int fd[2];
+			if(pipe(fd)){
+				perror("pipe");
+				exit(1);
+			}
 			
 			//loops through command string and places command at the beginning and args into myargs array
 			while(pstr != NULL){
 				//if & is found, then execute command up to & and save execCtr to start after & in next loop through
 				if(strcmp(pstr, "&") == 0){
 					pstr = strtok(NULL, " \n");
+					myargs[argC] = NULL;
+					argC++;
 					break;
+				}
+				else if(strcmp(pstr, "|") == 0){
+					myargs[argC] = NULL;
+					argC++;
+
+					numPipes++;
+					argInit[numPipes] = argC;
+					pstr = strtok(NULL, " \n");
+					isPipe = 1;
+					while(pstr != NULL && strcmp(pstr, "&") != 0 && strcmp(pstr, ">") != 0){
+						if(strcmp(pstr, "|") == 0){
+							myargs[argC] = NULL;
+							argC++;
+							numPipes++;
+							argInit[numPipes] = argC;
+							pstr = strtok(NULL, " \n");
+						}
+						myargs[argC] = pstr;
+						argC++;
+						pstr = strtok(NULL, " \n");
+					}
+					myargs[argC] = NULL;
+					argC++;
 				}
 				else if(strcmp(pstr, "exit") == 0){
 					exit(0);
@@ -133,20 +170,18 @@ int main(int argc, char *argv[]) {
 					myargs[argC] = pstr;
 					argC++;
 				}
+				if(myargs[argC-1] != NULL){
+					myargs[argC] = NULL;
+				}
 				pstr = strtok(NULL, " \n");
-				printf("pstr is now %s\n", pstr);
 			}
 			
-			printf("%s\n", comm);
+			//check if comm (or arg[0]) is a command on the path
 			while(access(strcat(buff, comm), X_OK) != 0 && pc < pathctr){
-				printf("%d\n", pc);
 				pc++;
 				memset(buff, 0, sizeof buff);
 				strcpy(buff, pathArr[pc]);
 			}
-
-			printf("%s\n", buff);
-			printf("%d\n", argC);
 			
 			int rc = fork();
 			if (rc < 0){
@@ -159,21 +194,55 @@ int main(int argc, char *argv[]) {
 
 
 			//if a path was found for the current argument
-				if (pc < pathctr && pb == 0){
-					//char *myargs[2];
+				if (pc < pathctr && pb == 0 && isPipe == 0){
 					myargs[0] = strdup(buff);
-					myargs[argC] = NULL;
+					//myargs[argC] = NULL;
 					if(execvp(myargs[0], myargs) == -1){
 						char error_message[30] = "error\n";
 						write(STDERR_FILENO, error_message, strlen(error_message));
+						exit(1);
 					}
-					exit(1);
+				}else if(isPipe == 1){
+					dup2(fd[1], 1);
+					close(fd[0]);
+					close(fd[1]);
+					myargs[0] = strdup(buff);
+					if(execvp(myargs[0], myargs) == -1){
+						char error_message[30] = "error1\n";
+						write(STDERR_FILENO, error_message, strlen(error_message));
+						exit(1);
+					}
 				}
 				exit(1);
-			
 			}else{
-				int rc_wait = wait(NULL);
+				if(pc < pathctr && isPipe == 1){
+				
+					rc = fork();
+
+					if(rc < 0){
+						fprintf(stderr, "fork failed\n");
+						exit(1);
+					}
+					if(rc == 0){
+						dup2(fd[0], 0);
+						close(fd[1]);
+						close(fd[0]);
+						if(execvp(myargs[argInit[1]], myargs) == -1){
+							char error_message[30] = "error2\n";
+							write(STDERR_FILENO, error_message, strlen(error_message));
+							exit(1);
+						}
+					}else{
+						close(fd[0]);
+						close(fd[1]);
+						int rc_wait = wait(NULL);
+					}
+				
+				}else{
+					int rc_wait = wait(NULL);
+				}
 			}
+			int rc_wait = wait(NULL);
 		}
 		}
 	}
