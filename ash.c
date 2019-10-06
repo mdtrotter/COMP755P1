@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <fcntl.h>
 #include <sys/wait.h>
 
 int main(int argc, char *argv[]) {
@@ -31,8 +32,9 @@ int main(int argc, char *argv[]) {
 			printf("Could not open file %s", filename);
 			return 1;
 		}
-		while (fgets(str, 200, fp) != NULL)
+		while (fgets(str, 200, fp) != NULL){
 			system(str);
+		}
 		fclose(fp);
 		return 0;
 	}
@@ -41,23 +43,11 @@ int main(int argc, char *argv[]) {
 		
 		//begins shell prompt
 		printf("%s", "ash>> ");
-		chars = getline(&str, &bufsize, stdin); 
-		if( strchr(str, '>') != NULL){
-			system(str);
-		}else{
-			// splits input string by " " and "\n"
-			char *pstr = strtok(str, " \n");
-			
-		while(pstr != NULL){
-						
+		chars = getline(&str, &bufsize, stdin);
+		// splits input string by " " and "\n"
+		char *pstr = strtok(str, " \n");
 
-			/*int rc = fork();
-			if (rc < 0) {
-				//fork failed
-				fprintf(stderr, "fork failed\n");
-				exit(1);
-			}else if(rc == 0){
-			*/
+		while(pstr != NULL){
 
 			//tracks how many paths have been tested with the command
 			int pc = 0;
@@ -82,9 +72,11 @@ int main(int argc, char *argv[]) {
 
 			//stores commands
 			char comm[255] = "";
+			char outp[100] = "";
 
 			//init is a boolean value that is set to false once the first argument is saved to comm (for path testing)
 			int init = 1;
+			int red = 0;
 
 			//argC tracks each argument associated with the first command
 			int argC = 1;
@@ -96,19 +88,20 @@ int main(int argc, char *argv[]) {
 			//pipe stuff
 			int numPipes = 0;
 			int isPipe = 0;
-			/*int fd[2];
-			if(pipe(fd)){
-				perror("pipe");
-				exit(1);
-			}*/
-			
+						
 			//loops through command string and places command at the beginning and args into myargs array
 			while(pstr != NULL){
 				//if & is found, then execute command up to & and save execCtr to start after & in next loop through
 				if(strcmp(pstr, "&") == 0){
 					pstr = strtok(NULL, " \n");
 					myargs[argC] = NULL;
-					argC++;
+					break;
+				}
+				if(strcmp(pstr, ">") == 0){
+					red = 1;
+					pstr = strtok(NULL, " \n");
+					strcat(outp, pstr);
+					pstr = strtok(NULL, " \n");
 					break;
 				}
 				else if(strcmp(pstr, "|") == 0){
@@ -130,10 +123,20 @@ int main(int argc, char *argv[]) {
 						args[arrC][argC] = pstr;
 						argC++;
 						pstr = strtok(NULL, " \n");
+
+					}if(pstr != NULL && strcmp(pstr, ">") == 0){
+						red = 1;
+						pstr = strtok(NULL, " \n");
+						strcat(outp, pstr);
 					}
+
 					args[arrC][argC] = NULL;
-				}
-				else if(strcmp(pstr, "exit") == 0){
+					if(pstr != NULL)
+						pstr = strtok(NULL, " \n");
+					if(pstr != NULL && strcmp(pstr, "&") == 0)
+						pstr = strtok(NULL, " \n");
+					break;
+				}else if(strcmp(pstr, "exit") == 0){
 					exit(0);
 				}
 				else if(strcmp(pstr, "cd") == 0){
@@ -153,11 +156,11 @@ int main(int argc, char *argv[]) {
 				else if(init == 1){
 					strcat(comm, pstr);
 					init = 0;
-					args[arrC][argC] = NULL;
+					args[0][argC] = NULL;
 				}else{
 					args[arrC][argC] = pstr;
 					argC++;
-					myargs[argC] = NULL;
+					args[arrC][argC] = NULL;
 				}
 				pstr = strtok(NULL, " \n");
 			}
@@ -168,12 +171,15 @@ int main(int argc, char *argv[]) {
 				memset(buff, 0, sizeof buff);
 				strcpy(buff, pathArr[pc]);
 			}
-			args[0][0] = strdup(buff);
+			if(pc < pathctr)
+				args[0][0] = strdup(buff);
+			else
+				printf("%s\n", "command is not on path");
 			
 			int rc = fork();
 			if (rc < 0){
 				//fork failed
-				fprintf(stderr, "fork failed\n");
+			fprintf(stderr, "fork failed\n");
 				exit(1);
 			}
 
@@ -182,7 +188,11 @@ int main(int argc, char *argv[]) {
 
 			//if a path was found for the current argument
 				if (pc < pathctr && pb == 0 && isPipe == 0){
-					//args[0][0] = strdup(buff);
+					if(red = 1){
+						int fw = open(outp, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+						dup2(fw, 1);
+						close(fw);
+					}
 					if(execvp(args[0][0], args[0]) == -1){
 						char error_message[30] = "error\n";
 						write(STDERR_FILENO, error_message, strlen(error_message));
@@ -194,9 +204,7 @@ int main(int argc, char *argv[]) {
 				if(pc < pathctr && isPipe == 1 && pb == 0){
 					int fd[2];
 					int fdd = 0;
-					//int *fds[10][2];
 					for(int i=0; i<numPipes+1; i++){
-						
 						if(i != numPipes){
 							pipe(fd);
 						}
@@ -207,6 +215,12 @@ int main(int argc, char *argv[]) {
 							dup2(fdd, 0);
 							if(i != numPipes){
 								dup2(fd[1], 1);
+							}else{
+								if(red == 1){
+									int fw = open(outp, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+									dup2(fw, 1);
+									close(fw);
+								}
 							}
 							close(fd[0]);
 							if(execvp(args[i][0], args[i]) == -1){
@@ -216,38 +230,13 @@ int main(int argc, char *argv[]) {
 							}
 						}else{
 							int rc_wait = wait(NULL);
-							//close(fd[0]);
 							close(fd[1]);
 							fdd = fd[0];
 						}
 					}
-					/*rc = fork();
-
-					if(rc < 0){
-						fprintf(stderr, "fork failed\n");
-						exit(1);
-					}
-					if(rc == 0){
-						dup2(fd[0], 0);
-						close(fd[1]);
-						close(fd[0]);
-						if(execvp(args[1][0], args[1]) == -1){
-							char error_message[30] = "error2\n";
-							write(STDERR_FILENO, error_message, strlen(error_message));
-							exit(1);
-						}
-					}else{
-						close(fd[0]);
-						close(fd[1]);
-						int rc_wait = wait(NULL);
-					}
-				*/
-				}/*else{
-					int rc_wait = wait(NULL);
-				}*/
+				}
 			}
 			int rc_wait = wait(NULL);
-		}
 		}
 	}
 	return 0;
